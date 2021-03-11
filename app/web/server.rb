@@ -40,7 +40,7 @@ module EventSourceryTodoApp
       Hash[
         params.merge(
           JSON.parse(request.body.read)
-        ).map{ |k, v| [k.to_sym, v] }
+        ).map { |k, v| [k.to_sym, v] }
       ]
     end
 

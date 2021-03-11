@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+
+
 require 'event_sourcery'
 require 'event_sourcery/postgres'
 

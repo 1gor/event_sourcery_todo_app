@@ -1,0 +1,15 @@
+# Complete the TODO
+:part = scheduled
+GET http://localhost:3000/todos/:part
+
+# Abandon TODO
+
+:todo_id = 0b341422-c516-4ee4-8f3e-ef1992dfff32
+POST http://0.0.0.0:3000/todo/:todo_id/abandon
+Content-Type: application/json
+
+{
+"todo_id": "0b341422-c516-4ee4-8f3e-ef1992dfff32",
+"title": "My task edited",
+"abandoned_on": "2021-01-01"
+}
