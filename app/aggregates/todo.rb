@@ -1,7 +1,30 @@
+# frozen_string_literal: true
+
+
+
 module EventSourceryTodoApp
   module Aggregates
+
+    module Invariants
+      def self.included(base)
+        base.extend(ClassMethods)
+      end
+
+      module ClassMethods
+        def invariant(name, &block)
+          (@invariants ||= {})[name] = block
+        end
+      end
+
+      def enforce(condition)
+        invariant = self.class.instance_variable_get(:@invariants)[condition]
+        instance_eval(&invariant)
+      end
+    end
+
     class Todo
       include EventSourcery::AggregateRoot
+      include Invariants
 
       # These apply methods are the hook that this aggregate uses to update
       # its internal state from events.
@@ -28,8 +51,25 @@ module EventSourceryTodoApp
       apply StakeholderNotifiedOfTodoCompletion do |event|
       end
 
-      def add(payload)
+      # Invariants
+      invariant :not_added do
         raise UnprocessableEntity, "Todo #{id.inspect} already exists" if added?
+      end
+
+      invariant :added do
+        raise UnprocessableEntity, "Todo #{id.inspect} does not exist" unless added?
+      end
+
+      invariant :not_completed do
+        raise UnprocessableEntity, "Todo #{id.inspect} is complete" if completed
+      end
+
+      invariant :not_abandoned do
+        raise UnprocessableEntity, "Todo #{id.inspect} is abandoned" if abandoned
+      end
+
+      def add(payload)
+        enforce(:not_added)
 
         apply_event(TodoAdded,
           aggregate_id: id,
@@ -41,9 +81,9 @@ module EventSourceryTodoApp
       # Note how they raise new events to indicate the change in state.
 
       def amend(payload)
-        raise UnprocessableEntity, "Todo #{id.inspect} does not exist" unless added?
-        raise UnprocessableEntity, "Todo #{id.inspect} is complete" if completed
-        raise UnprocessableEntity, "Todo #{id.inspect} is abandoned" if abandoned
+        enforce(:added)
+        enforce(:not_completed)
+        enforce(:not_abandoned)
 
         apply_event(TodoAmended,
           aggregate_id: id,
@@ -63,8 +103,9 @@ module EventSourceryTodoApp
       end
 
       def abandon(payload)
-        raise UnprocessableEntity, "Todo #{id.inspect} does not exist" unless added?
-        raise UnprocessableEntity, "Todo #{id.inspect} already complete" if completed
+        enforce(:added)
+        enforce(:not_completed)
+        # raise UnprocessableEntity, "Todo #{id.inspect} already complete" if completed
         raise UnprocessableEntity, "Todo #{id.inspect} already abandoned" if abandoned
 
         apply_event(TodoAbandoned,
