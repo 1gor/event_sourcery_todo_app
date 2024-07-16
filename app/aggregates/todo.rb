@@ -3,6 +3,8 @@
 module EventSourceryTodoApp
   module Aggregates
     module Invariants
+      DEFAULT_ERROR = UnprocessableEntity
+
       def self.included(base)
         base.extend(ClassMethods)
       end
@@ -13,7 +15,9 @@ module EventSourceryTodoApp
         end
       end
 
-      def enforce(condition, message = nil, error = UnprocessableEntity)
+      private
+
+      def enforce(condition, message, error)
         invariant = self.class.instance_variable_get(:@invariants)[condition]
         raise ArgumentError, "Invariant not defined: #{condition}" unless invariant
 
@@ -25,13 +29,18 @@ module EventSourceryTodoApp
         end
       end
 
-      def enforce_invariants(**conditions)
-        conditions.each do |condition, options|
+      public
+
+      def enforce_invariants(*conditions, &customizations_block)
+        customizations = customizations_block ? customizations_block.call : {}
+
+        conditions.each do |condition|
+          options = customizations[condition]
           if options.nil?
-            enforce(condition)
+            enforce(condition, nil, DEFAULT_ERROR)
           elsif options.is_a?(Hash)
             message = options[:msg]
-            error = options[:e] || UnprocessableEntity
+            error = options[:e] || DEFAULT_ERROR
             enforce(condition, message, error)
           else
             raise ArgumentError, "Invalid options for #{condition}: #{options.inspect}"
@@ -79,7 +88,7 @@ module EventSourceryTodoApp
       end
 
       def add(payload)
-        enforce_invariants(not_added: nil)
+        enforce_invariants(:not_added)
 
         apply_event(TodoAdded,
                     aggregate_id: id,
@@ -88,10 +97,15 @@ module EventSourceryTodoApp
 
       def amend(payload)
         enforce_invariants(
-          added: nil,
-          not_completed: { msg: "Todo #{id.inspect} is complete" },
-          not_abandoned: { msg: "Todo #{id.inspect} is abandoned" }
-        )
+          :added,
+          :not_completed,
+          :not_abandoned
+        ) do
+          {
+            not_completed: { msg: "Todo #{id.inspect} is complete" },
+            not_abandoned: { msg: "Todo #{id.inspect} is abandoned" }
+          }
+        end
 
         apply_event(TodoAmended,
                     aggregate_id: id,
@@ -100,9 +114,9 @@ module EventSourceryTodoApp
 
       def complete(payload)
         enforce_invariants(
-          added: ,
-          not_completed: ,
-          not_abandoned:
+          :added,
+          :not_completed,
+          :not_abandoned
         )
 
         apply_event(TodoCompleted,
@@ -112,9 +126,9 @@ module EventSourceryTodoApp
 
       def abandon(payload)
         enforce_invariants(
-          added: nil,
-          not_completed: nil,
-          not_abandoned: nil
+          :added,
+          :not_completed,
+          :not_abandoned
         )
 
         apply_event(TodoAbandoned,
