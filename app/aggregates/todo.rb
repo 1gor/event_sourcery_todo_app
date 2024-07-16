@@ -100,9 +100,9 @@ module EventSourceryTodoApp
 
       def complete(payload)
         enforce_invariants(
-          added: nil,
-          not_completed: nil,
-          not_abandoned: nil
+          added: ,
+          not_completed: ,
+          not_abandoned:
         )
 
         apply_event(TodoCompleted,
