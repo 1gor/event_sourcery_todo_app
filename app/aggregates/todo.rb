@@ -25,14 +25,16 @@ module EventSourceryTodoApp
         end
       end
 
-      def enforce_invariants(conditions = {})
+      def enforce_invariants(**conditions)
         conditions.each do |condition, options|
-          if options.is_a?(Hash)
+          if options.nil?
+            enforce(condition)
+          elsif options.is_a?(Hash)
             message = options[:msg]
             error = options[:e] || UnprocessableEntity
             enforce(condition, message, error)
           else
-            enforce(condition)
+            raise ArgumentError, "Invalid options for #{condition}: #{options.inspect}"
           end
         end
       end
@@ -87,8 +89,8 @@ module EventSourceryTodoApp
       def amend(payload)
         enforce_invariants(
           added: nil,
-          not_completed: {msg: "Todo #{id.inspect} is complete"},
-          not_abandoned: {msg: "Todo #{id.inspect} is abandoned"}
+          not_completed: { msg: "Todo #{id.inspect} is complete" },
+          not_abandoned: { msg: "Todo #{id.inspect} is abandoned" }
         )
 
         apply_event(TodoAmended,
