@@ -1,3 +1,7 @@
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift "."
+
 require 'event_sourcery'
 require 'event_sourcery/postgres'
 
@@ -72,4 +76,12 @@ EventSourcery::Postgres.configure do |config|
   # databases. For the purposes of this example we'll use one.
   config.event_store_database = database
   config.projections_database = database
+end
+
+require "lib/invariants"
+require "app/errors"
+
+Invariants.configure do |config|
+  config.default_error = EventSourceryTodoApp::UnprocessableEntity
+  config.default_invariant_message = "Cannot enforce invariant: %{condition}"
 end

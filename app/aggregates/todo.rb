@@ -8,10 +8,10 @@ module EventSourceryTodoApp
       include EventSourcery::AggregateRoot
       include Invariants
 
-      configure_invariants do |config|
-        config.default_error = UnprocessableEntity
-        config.default_invariant_message = "Todo invariant cannot be enforced: %{condition}"
-      end
+      # configure_invariants do |config|
+      #   config.default_error = UnprocessableEntity
+      #   config.default_invariant_message = "Todo invariant cannot be enforced: %{condition}"
+      # end
 
       apply TodoAdded do |event|
         @aggregate_id = event.aggregate_id

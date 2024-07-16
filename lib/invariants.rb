@@ -65,7 +65,7 @@ module Invariants
       if options.nil?
         enforce(condition, nil, config.default_error)
       elsif options.is_a?(Hash)
-        message = options[:msg] || config.default_invariant_message % { condition: condition }
+        message = options[:msg] || nil
         error = options[:e] || config.default_error
         enforce(condition, message, error)
       else
@@ -77,6 +77,10 @@ module Invariants
   private
 
   def config
-    self.class.invariants_configuration
+    if self.class.instance_variable_defined?(:@invariants_configuration)
+      self.class.invariants_configuration
+    else
+      Invariants.global_configuration
+    end
   end
 end
