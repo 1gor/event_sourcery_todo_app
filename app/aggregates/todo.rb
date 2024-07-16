@@ -1,24 +1,28 @@
 # frozen_string_literal: true
 
-
-
 module EventSourceryTodoApp
   module Aggregates
-
     module Invariants
       def self.included(base)
         base.extend(ClassMethods)
       end
 
       module ClassMethods
-        def invariant(name, &block)
-          (@invariants ||= {})[name] = block
+        def invariant(name, default_message = "Invariant violation", &block)
+          (@invariants ||= {})[name] = {block: block, message: default_message}
         end
       end
 
-      def enforce(condition)
+      def enforce(condition, error: UnprocessableEntity, message: nil)
         invariant = self.class.instance_variable_get(:@invariants)[condition]
-        instance_eval(&invariant)
+        raise ArgumentError, "Invariant not defined: #{condition}" unless invariant
+
+        custom_message = message || invariant[:message]
+        begin
+          instance_eval(&invariant[:block])
+        rescue => e
+          raise error, custom_message
+        end
       end
     end
 
@@ -52,66 +56,61 @@ module EventSourceryTodoApp
       end
 
       # Invariants
-      invariant :not_added do
-        raise UnprocessableEntity, "Todo #{id.inspect} already exists" if added?
+      invariant :not_added, "Todo already exists" do
+        raise default_error unless @aggregate_id.nil?
       end
 
-      invariant :added do
-        raise UnprocessableEntity, "Todo #{id.inspect} does not exist" unless added?
+      invariant :added, "Todo does not exist" do
+        raise default_error if @aggregate_id.nil?
       end
 
-      invariant :not_completed do
-        raise UnprocessableEntity, "Todo #{id.inspect} is complete" if completed
+      invariant :not_completed, "Todo is already complete" do
+        raise default_error if @completed
       end
 
-      invariant :not_abandoned do
-        raise UnprocessableEntity, "Todo #{id.inspect} is abandoned" if abandoned
+      invariant :not_abandoned, "Todo is already abandoned" do
+        raise default_error if @abandoned
       end
 
       def add(payload)
-        enforce(:not_added)
+        enforce(:not_added, message: "Todo #{id.inspect} already exists")
 
         apply_event(TodoAdded,
           aggregate_id: id,
-          body: payload,
-        )
+          body: payload)
       end
 
       # The methods below are how this aggregate handles different commands.
       # Note how they raise new events to indicate the change in state.
 
       def amend(payload)
-        enforce(:added)
-        enforce(:not_completed)
-        enforce(:not_abandoned)
+        enforce(:added, message: "Todo #{id.inspect} does not exist")
+        enforce(:not_completed, message: "Todo #{id.inspect} is complete")
+        enforce(:not_abandoned, message: "Todo #{id.inspect} is abandoned")
 
         apply_event(TodoAmended,
           aggregate_id: id,
-          body: payload,
-        )
+          body: payload)
       end
 
       def complete(payload)
-        raise UnprocessableEntity, "Todo #{id.inspect} does not exist" unless added?
-        raise UnprocessableEntity, "Todo #{id.inspect} already complete" if completed
-        raise UnprocessableEntity, "Todo #{id.inspect} already abandoned" if abandoned
+        enforce(:added, message: "Todo #{id.inspect} does not exist")
+        enforce(:not_completed, message: "Todo #{id.inspect} already complete")
+        enforce(:not_abandoned, message: "Todo #{id.inspect} already abandoned")
 
         apply_event(TodoCompleted,
           aggregate_id: id,
-          body: payload,
-        )
+          body: payload)
       end
 
       def abandon(payload)
-        enforce(:added)
-        enforce(:not_completed)
-        # raise UnprocessableEntity, "Todo #{id.inspect} already complete" if completed
-        raise UnprocessableEntity, "Todo #{id.inspect} already abandoned" if abandoned
+        enforce(:added, message: "Todo #{id.inspect} does not exist")
+        enforce(:not_completed, message: "Todo #{id.inspect} already complete")
+        enforce(:not_abandoned, message: "Todo #{id.inspect} already abandoned")
 
         apply_event(TodoAbandoned,
           aggregate_id: id,
-          body: payload,
-        )
+          body: payload)
       end
 
       private
