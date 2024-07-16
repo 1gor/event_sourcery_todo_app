@@ -9,7 +9,7 @@ module EventSourceryTodoApp
 
       module ClassMethods
         def invariant(name, default_message = "Invariant violation", &block)
-          (@invariants ||= {})[name] = {block: block, message: default_message}
+          (@invariants ||= {})[name] = { block: block, message: default_message }
         end
       end
 
@@ -22,6 +22,18 @@ module EventSourceryTodoApp
           instance_eval(&invariant[:block])
         rescue => e
           raise error, custom_message
+        end
+      end
+
+      def enforce_invariants(**conditions)
+        conditions.each do |condition, options|
+          if options.nil?
+            enforce(condition)
+          else
+            message = options[:msg]
+            error = options[:e] || UnprocessableEntity
+            enforce(condition, message, error)
+          end
         end
       end
     end
@@ -65,41 +77,47 @@ module EventSourceryTodoApp
       end
 
       def add(payload)
-        enforce(:not_added, "Todo #{id.inspect} already exists")
+        enforce_invariants(not_added: { msg: "Todo #{id.inspect} already exists" })
 
         apply_event(TodoAdded,
-          aggregate_id: id,
-          body: payload)
+                    aggregate_id: id,
+                    body: payload)
       end
 
       def amend(payload)
-        enforce(:added, "Todo #{id.inspect} does not exist")
-        enforce(:not_completed, "Todo #{id.inspect} is complete")
-        enforce(:not_abandoned, "Todo #{id.inspect} is abandoned")
+        enforce_invariants(
+          added: { msg: "Todo #{id.inspect} does not exist" },
+          not_completed: { msg: "Todo #{id.inspect} is complete" },
+          not_abandoned: { msg: "Todo #{id.inspect} is abandoned" }
+        )
 
         apply_event(TodoAmended,
-          aggregate_id: id,
-          body: payload)
+                    aggregate_id: id,
+                    body: payload)
       end
 
       def complete(payload)
-        enforce(:added, "Todo #{id.inspect} does not exist")
-        enforce(:not_completed, "Todo #{id.inspect} already complete")
-        enforce(:not_abandoned, "Todo #{id.inspect} already abandoned")
+        enforce_invariants(
+          added: { msg: "Todo #{id.inspect} does not exist" },
+          not_completed: { msg: "Todo #{id.inspect} already complete" },
+          not_abandoned: { msg: "Todo #{id.inspect} already abandoned" }
+        )
 
         apply_event(TodoCompleted,
-          aggregate_id: id,
-          body: payload)
+                    aggregate_id: id,
+                    body: payload)
       end
 
       def abandon(payload)
-        enforce(:added, "Todo #{id.inspect} does not exist")
-        enforce(:not_completed, "Todo #{id.inspect} already complete")
-        enforce(:not_abandoned, "Todo #{id.inspect} already abandoned")
+        enforce_invariants(
+          added: { msg: "Todo #{id.inspect} does not exist" },
+          not_completed: { msg: "Todo #{id.inspect} already complete" },
+          not_abandoned: { msg: "Todo #{id.inspect} already abandoned" }
+        )
 
         apply_event(TodoAbandoned,
-          aggregate_id: id,
-          body: payload)
+                    aggregate_id: id,
+                    body: payload)
       end
 
       private
