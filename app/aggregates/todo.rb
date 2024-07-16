@@ -1,57 +1,17 @@
 # frozen_string_literal: true
 
+require "lib/invariants"
+
 module EventSourceryTodoApp
   module Aggregates
-    module Invariants
-      DEFAULT_ERROR = UnprocessableEntity
-
-      def self.included(base)
-        base.extend(ClassMethods)
-      end
-
-      module ClassMethods
-        def invariant(name, &block)
-          (@invariants ||= {})[name] = { block: block }
-        end
-      end
-
-      private
-
-      def enforce(condition, message, error)
-        invariant = self.class.instance_variable_get(:@invariants)[condition]
-        raise ArgumentError, "Invariant not defined: #{condition}" unless invariant
-
-        custom_message = message
-        begin
-          instance_exec(custom_message, error, &invariant[:block])
-        rescue => e
-          raise error, custom_message || e.message
-        end
-      end
-
-      public
-
-      def enforce_invariants(*conditions, &customizations_block)
-        customizations = customizations_block ? customizations_block.call : {}
-
-        conditions.each do |condition|
-          options = customizations[condition]
-          if options.nil?
-            enforce(condition, nil, DEFAULT_ERROR)
-          elsif options.is_a?(Hash)
-            message = options[:msg]
-            error = options[:e] || DEFAULT_ERROR
-            enforce(condition, message, error)
-          else
-            raise ArgumentError, "Invalid options for #{condition}: #{options.inspect}"
-          end
-        end
-      end
-    end
-
     class Todo
       include EventSourcery::AggregateRoot
       include Invariants
+
+      configure_invariants do |config|
+        config.default_error = UnprocessableEntity
+        config.default_invariant_message = "Todo invariant cannot be enforced: %{condition}"
+      end
 
       apply TodoAdded do |event|
         @aggregate_id = event.aggregate_id
