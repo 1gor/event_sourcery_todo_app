@@ -8,8 +8,8 @@ module EventSourceryTodoApp
       end
 
       module ClassMethods
-        def invariant(name, default_message = "Invariant violation", &block)
-          (@invariants ||= {})[name] = { block: block, message: default_message }
+        def invariant(name, &block)
+          (@invariants ||= {})[name] = { block: block }
         end
       end
 
@@ -17,22 +17,22 @@ module EventSourceryTodoApp
         invariant = self.class.instance_variable_get(:@invariants)[condition]
         raise ArgumentError, "Invariant not defined: #{condition}" unless invariant
 
-        custom_message = message || invariant[:message]
+        custom_message = message
         begin
-          instance_eval(&invariant[:block])
+          instance_exec(custom_message, error, &invariant[:block])
         rescue => e
-          raise error, custom_message
+          raise error, custom_message || e.message
         end
       end
 
-      def enforce_invariants(**conditions)
+      def enforce_invariants(conditions = {})
         conditions.each do |condition, options|
-          if options.nil?
-            enforce(condition)
-          else
+          if options.is_a?(Hash)
             message = options[:msg]
             error = options[:e] || UnprocessableEntity
             enforce(condition, message, error)
+          else
+            enforce(condition)
           end
         end
       end
@@ -60,24 +60,24 @@ module EventSourceryTodoApp
       apply StakeholderNotifiedOfTodoCompletion do |event|
       end
 
-      invariant :not_added, "Todo already exists" do
-        raise default_error unless @aggregate_id.nil?
+      invariant :not_added do |message, error|
+        raise error, message || "Todo #{id.inspect} already exists" unless @aggregate_id.nil?
       end
 
-      invariant :added, "Todo does not exist" do
-        raise default_error if @aggregate_id.nil?
+      invariant :added do |message, error|
+        raise error, message || "Todo #{id.inspect} does not exist" if @aggregate_id.nil?
       end
 
-      invariant :not_completed, "Todo is already complete" do
-        raise default_error if @completed
+      invariant :not_completed do |message, error|
+        raise error, message || "Todo #{id.inspect} already complete" if @completed
       end
 
-      invariant :not_abandoned, "Todo is already abandoned" do
-        raise default_error if @abandoned
+      invariant :not_abandoned do |message, error|
+        raise error, message || "Todo #{id.inspect} already abandoned" if @abandoned
       end
 
       def add(payload)
-        enforce_invariants(not_added: { msg: "Todo #{id.inspect} already exists" })
+        enforce_invariants(not_added: nil)
 
         apply_event(TodoAdded,
                     aggregate_id: id,
@@ -86,9 +86,9 @@ module EventSourceryTodoApp
 
       def amend(payload)
         enforce_invariants(
-          added: { msg: "Todo #{id.inspect} does not exist" },
-          not_completed: { msg: "Todo #{id.inspect} is complete" },
-          not_abandoned: { msg: "Todo #{id.inspect} is abandoned" }
+          added: nil,
+          not_completed: {msg: "Todo #{id.inspect} is complete"},
+          not_abandoned: {msg: "Todo #{id.inspect} is abandoned"}
         )
 
         apply_event(TodoAmended,
@@ -98,9 +98,9 @@ module EventSourceryTodoApp
 
       def complete(payload)
         enforce_invariants(
-          added: { msg: "Todo #{id.inspect} does not exist" },
-          not_completed: { msg: "Todo #{id.inspect} already complete" },
-          not_abandoned: { msg: "Todo #{id.inspect} already abandoned" }
+          added: nil,
+          not_completed: nil,
+          not_abandoned: nil
         )
 
         apply_event(TodoCompleted,
@@ -110,9 +110,9 @@ module EventSourceryTodoApp
 
       def abandon(payload)
         enforce_invariants(
-          added: { msg: "Todo #{id.inspect} does not exist" },
-          not_completed: { msg: "Todo #{id.inspect} already complete" },
-          not_abandoned: { msg: "Todo #{id.inspect} already abandoned" }
+          added: nil,
+          not_completed: nil,
+          not_abandoned: nil
         )
 
         apply_event(TodoAbandoned,
